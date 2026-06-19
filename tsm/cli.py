@@ -7,7 +7,8 @@ from rich.table import Table
 from rich.panel import Panel
 
 from .storage import Storage, SSHSession, SessionGroup, CommandTemplate, get_config_dir
-from .executor import BatchExecutor, ResultDisplay
+from .executor import BatchExecutor
+from .display import BatchResultView, ResultDisplay
 
 console = Console()
 storage = Storage()
@@ -263,14 +264,16 @@ def exec(group_name, command, output_format, no_stderr, no_stdout):
     if result is None:
         return
 
-    if output_format == "detailed":
-        ResultDisplay.show_detailed(result, show_stdout=not no_stdout, show_stderr=not no_stderr)
-    elif output_format == "summary":
-        ResultDisplay.show_summary(result)
-    elif output_format == "table":
-        ResultDisplay.show_table(result)
+    view = BatchResultView(result.command, result.results)
 
-    if not result.all_success:
+    if output_format == "detailed":
+        ResultDisplay.show_detailed(view, show_stdout=not no_stdout, show_stderr=not no_stderr)
+    elif output_format == "summary":
+        ResultDisplay.show_summary(view)
+    elif output_format == "table":
+        ResultDisplay.show_table(view)
+
+    if not view.all_success:
         click.get_current_context().exit(1)
 
 
@@ -290,13 +293,14 @@ def exec_template(group_name, template_name, output_format):
     has_failure = False
     for i, result in enumerate(results):
         console.print(f"\n[bold magenta]Step {i+1}/{len(results)}[/bold magenta]")
+        view = BatchResultView(result.command, result.results)
         if output_format == "detailed":
-            ResultDisplay.show_detailed(result)
+            ResultDisplay.show_detailed(view)
         elif output_format == "summary":
-            ResultDisplay.show_summary(result)
+            ResultDisplay.show_summary(view)
         elif output_format == "table":
-            ResultDisplay.show_table(result)
-        if not result.all_success:
+            ResultDisplay.show_table(view)
+        if not view.all_success:
             has_failure = True
 
     if has_failure:
