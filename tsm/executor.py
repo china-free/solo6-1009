@@ -104,7 +104,12 @@ class BatchExecutor:
         return batch_result
 
     def execute_template_on_group(self, group_name: str, template_name: str) -> Optional[List[BatchResult]]:
-        """Execute a command template on a group."""
+        """Execute a command template on a group.
+
+        Per-session failure tracking: if a session fails at command N,
+        it is skipped for commands N+1..end, but other healthy sessions
+        continue executing the full template.
+        """
         template = self.storage.get_template(template_name)
         if not template:
             console.print(f"[red]Template '{template_name}' not found[/red]")
@@ -126,12 +131,29 @@ class BatchExecutor:
             return None
 
         results: List[BatchResult] = []
+        failed_sessions: set = set()
+
         for cmd in template.commands:
-            batch_result = self.execute(sessions, cmd)
+            active_sessions = [s for s in sessions if s.name not in failed_sessions]
+            batch_result = BatchResult(command=cmd)
+
+            for name in sorted(failed_sessions):
+                batch_result.results.append(CommandResult(
+                    session_name=name,
+                    command=cmd,
+                    success=False,
+                    error="Skipped due to previous failure in this session",
+                ))
+                batch_result.failed_sessions.append(name)
+
+            if active_sessions:
+                active_batch = self.execute(active_sessions, cmd)
+                batch_result.results.extend(active_batch.results)
+                batch_result.successful_sessions.extend(active_batch.successful_sessions)
+                batch_result.failed_sessions.extend(active_batch.failed_sessions)
+                failed_sessions.update(active_batch.failed_sessions)
+
             results.append(batch_result)
-            if not batch_result.all_success:
-                console.print(f"[yellow]Template execution stopped at command: {cmd}[/yellow]")
-                break
 
         return results
 

@@ -287,7 +287,7 @@ def exec_template(group_name, template_name, output_format):
     if results is None:
         return
 
-    all_success = True
+    has_failure = False
     for i, result in enumerate(results):
         console.print(f"\n[bold magenta]Step {i+1}/{len(results)}[/bold magenta]")
         if output_format == "detailed":
@@ -297,10 +297,9 @@ def exec_template(group_name, template_name, output_format):
         elif output_format == "table":
             ResultDisplay.show_table(result)
         if not result.all_success:
-            all_success = False
-            break
+            has_failure = True
 
-    if not all_success:
+    if has_failure:
         click.get_current_context().exit(1)
 
 
